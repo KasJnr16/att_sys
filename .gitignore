@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+
+node_modules/
+.next/
+venv/
+.venv/
+
+.idea/
+*.iml
