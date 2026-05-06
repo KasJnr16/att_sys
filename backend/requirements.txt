@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+alembic
+asyncpg
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+webauthn
+python-multipart
+structlog
+slowapi
+email-validator
+pytest
+httpx
+pytest-asyncio
