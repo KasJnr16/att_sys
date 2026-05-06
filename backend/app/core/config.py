@@ -1,5 +1,7 @@
 from typing import Annotated, Literal, Optional
 
+from sqlalchemy.engine import make_url
+
 from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -20,14 +22,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     ALGORITHM: str = "HS256"
 
-    POSTGRES_SERVER: str = Field(..., min_length=1)
-    POSTGRES_USER: str = Field(..., min_length=1)
-    POSTGRES_PASSWORD: str = Field(..., min_length=1)
-    POSTGRES_DB: str = Field(..., min_length=1)
+    POSTGRES_SERVER: Optional[str] = None
+    POSTGRES_USER: Optional[str] = None
+    POSTGRES_PASSWORD: Optional[str] = None
+    POSTGRES_DB: Optional[str] = None
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
-
-    REDIS_HOST: str = Field(..., min_length=1)
-    REDIS_PORT: int = 6379
 
     RP_ID: str = Field(..., min_length=1)
     RP_NAME: str = "University Attendance System"
@@ -47,7 +46,19 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def finalize_settings(self) -> "Settings":
-        if not self.SQLALCHEMY_DATABASE_URI:
+        if self.SQLALCHEMY_DATABASE_URI:
+            self.SQLALCHEMY_DATABASE_URI = self._normalize_async_database_uri(self.SQLALCHEMY_DATABASE_URI)
+        else:
+            missing_fields = [
+                name
+                for name in ("POSTGRES_SERVER", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
+                if not getattr(self, name)
+            ]
+            if missing_fields:
+                raise ValueError(
+                    "Set SQLALCHEMY_DATABASE_URI or provide all POSTGRES_* settings. "
+                    f"Missing: {', '.join(missing_fields)}"
+                )
             self.SQLALCHEMY_DATABASE_URI = (
                 f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
                 f"@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
@@ -81,6 +92,22 @@ class Settings(BaseSettings):
     @property
     def origin_str(self) -> str:
         return str(self.ORIGIN).rstrip("/")
+
+    @staticmethod
+    def _normalize_async_database_uri(uri: str) -> str:
+        url = make_url(uri)
+        if url.drivername == "postgresql":
+            url = url.set(drivername="postgresql+asyncpg")
+
+        if url.drivername == "postgresql+asyncpg":
+            query = dict(url.query)
+            sslmode = query.pop("sslmode", None)
+            query.pop("channel_binding", None)
+            if sslmode and sslmode != "disable" and "ssl" not in query:
+                query["ssl"] = "require"
+            url = url.set(query=query)
+
+        return url.render_as_string(hide_password=False)
 
 
 settings = Settings()
