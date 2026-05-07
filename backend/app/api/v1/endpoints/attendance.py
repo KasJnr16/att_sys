@@ -35,7 +35,7 @@ def _utcnow() -> datetime:
 
 
 def _build_client_fingerprint(request: Request) -> str:
-    client_ip = _get_client_ip(request)
+    client_ip = request.headers.get("x-attendance-client") or _get_client_ip(request)
     user_agent = request.headers.get("user-agent", "unknown")
     return AttendanceService.build_client_fingerprint(client_ip, user_agent)
 

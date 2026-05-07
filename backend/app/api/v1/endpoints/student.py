@@ -33,7 +33,7 @@ def _get_client_ip(request: Request) -> str:
 
 
 def _build_client_fingerprint(request: Request) -> str:
-    client_ip = _get_client_ip(request)
+    client_ip = request.headers.get("x-attendance-client") or _get_client_ip(request)
     user_agent = request.headers.get("user-agent", "unknown")
     return AttendanceService.build_client_fingerprint(client_ip, user_agent)
 
@@ -156,7 +156,9 @@ async def start_new_student_registration(
         raise HTTPException(status_code=400, detail="Programme not found for this session")
 
     existing = await db.execute(
-        select(Student).where(Student.student_index == request.student_index)
+        select(Student)
+        .where(Student.student_index == request.student_index)
+        .options(selectinload(Student.user))
     )
     student = existing.scalars().first()
     is_new_student = student is None
@@ -171,24 +173,49 @@ async def start_new_student_registration(
             raise HTTPException(status_code=500, detail="Student role not found")
 
         email = f"{request.student_index}@htu.edu.gh"
-
-        user = User(
-            email=email,
-            role_id=student_role.id,
-            is_active=True
+        existing_user_result = await db.execute(
+            select(User)
+            .where(User.email == email)
+            .options(selectinload(User.student), selectinload(User.role))
         )
-        db.add(user)
-        await db.flush()
+        user = existing_user_result.scalars().first()
 
-        student = Student(
-            user_id=user.id,
-            student_index=request.student_index,
-            full_name=request.full_name.strip(),
-            programme_id=programme.id
-        )
-        db.add(student)
-        await db.flush()
-        await db.refresh(student)
+        if user:
+            if user.student:
+                if user.student.student_index != request.student_index:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A different student account already uses this institutional email.",
+                    )
+                student = user.student
+                is_new_student = False
+            else:
+                if user.role and user.role.name != "student":
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This institutional email is already linked to a non-student account.",
+                    )
+                user.role_id = student_role.id
+                user.is_active = True
+        else:
+            user = User(
+                email=email,
+                role_id=student_role.id,
+                is_active=True
+            )
+            db.add(user)
+            await db.flush()
+
+        if student is None:
+            student = Student(
+                user_id=user.id,
+                student_index=request.student_index,
+                full_name=request.full_name.strip(),
+                programme_id=programme.id
+            )
+            db.add(student)
+            await db.flush()
+            await db.refresh(student)
 
     student_id = student.id
 

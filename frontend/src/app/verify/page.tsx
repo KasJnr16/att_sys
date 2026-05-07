@@ -11,6 +11,7 @@ import { Loader } from '@/components/ui/Loader';
 import { Modal } from '@/components/ui/Modal';
 import Link from 'next/link';
 import { getBrowserLocation } from '@/lib/geolocation';
+import { clearAttendanceClientId, getOrCreateAttendanceClientId } from '@/lib/attendanceClient';
 
 type Step = 'loading' | 'code' | 'identify' | 'register' | 'fingerprint' | 'confirm' | 'success' | 'error' | 'expired';
 
@@ -50,6 +51,7 @@ function VerifyContent() {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [registrationMode, setRegistrationMode] = useState<'new' | 'existing' | null>(null);
+  const [attendanceClientId, setAttendanceClientId] = useState<string | null>(null);
 
   const [processing, setProcessing] = useState(false);
 
@@ -61,12 +63,18 @@ function VerifyContent() {
     if (urlToken) {
       sessionStorage.setItem('attendance_verify_token', urlToken);
       setToken(urlToken);
+      setAttendanceClientId(getOrCreateAttendanceClientId());
       window.history.replaceState({}, '', window.location.pathname);
       return;
     }
 
     setToken(sessionStorage.getItem('attendance_verify_token'));
+    setAttendanceClientId(getOrCreateAttendanceClientId());
   }, [urlToken]);
+
+  const attendanceRequestConfig = attendanceClientId
+    ? { headers: { 'X-Attendance-Client': attendanceClientId } }
+    : undefined;
 
   useEffect(() => {
     const init = async () => {
@@ -82,6 +90,7 @@ function VerifyContent() {
 
         if (!data.valid) {
           sessionStorage.removeItem('attendance_verify_token');
+          clearAttendanceClientId();
           setStep('expired');
           setMessage('This attendance session is no longer active.');
           return;
@@ -104,11 +113,13 @@ function VerifyContent() {
       } catch (err: any) {
         if (err.response?.status === 410) {
           sessionStorage.removeItem('attendance_verify_token');
+          clearAttendanceClientId();
           setStep('expired');
           setMessage('This attendance session has expired.');
         } else {
           if (err.response?.status === 404) {
             sessionStorage.removeItem('attendance_verify_token');
+            clearAttendanceClientId();
           }
           setStep('error');
           setError(err.response?.data?.detail || 'Unable to load session.');
@@ -139,7 +150,7 @@ function VerifyContent() {
       await api.post('/verify-code', {
         token: token,
         code: verificationCode
-      });
+      }, attendanceRequestConfig);
       setStep('identify');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid code. Please try again.');
@@ -163,7 +174,10 @@ function VerifyContent() {
     setError('');
 
     try {
-      const response = await api.get(`/student/lookup?index=${studentIndex}&token=${encodeURIComponent(token)}`);
+      const response = await api.get(
+        `/student/lookup?index=${studentIndex}&token=${encodeURIComponent(token)}`,
+        attendanceRequestConfig,
+      );
       const data = response.data;
 
       if (data.exists) {
@@ -171,7 +185,7 @@ function VerifyContent() {
           const optionsResponse = await api.post('/get-student-webauthn-options', {
             student_index: studentIndex,
             token,
-          });
+          }, attendanceRequestConfig);
           setStudentInfo({
             id: optionsResponse.data.student.id,
             student_index: optionsResponse.data.student.student_index,
@@ -221,7 +235,7 @@ function VerifyContent() {
         full_name: registrationMode === 'new' ? fullName.trim() : undefined,
         class_session_id: sessionInfo.class_session_id,
         token,
-      });
+      }, attendanceRequestConfig);
       
       setWebauthnOptions(optionsResponse.data.webauthn_options);
       setChallenge(optionsResponse.data.webauthn_options.challenge);
@@ -236,13 +250,13 @@ function VerifyContent() {
         class_session_id: sessionInfo.class_session_id,
         token,
         webauthn_registration_response: registrationResponse,
-      });
+      }, attendanceRequestConfig);
 
       const data = registerResponse.data;
       const authOptionsResponse = await api.post('/get-student-webauthn-options', {
         student_index: studentIndex,
         token,
-      });
+      }, attendanceRequestConfig);
       setStudentInfo({
         id: data.student_id,
         student_index: authOptionsResponse.data.student.student_index,
@@ -264,7 +278,7 @@ function VerifyContent() {
           const authOptionsResponse = await api.post('/get-student-webauthn-options', {
             student_index: studentIndex,
             token,
-          });
+          }, attendanceRequestConfig);
           setStudentInfo({
             id: authOptionsResponse.data.student.id,
             student_index: authOptionsResponse.data.student.student_index,
@@ -331,9 +345,10 @@ function VerifyContent() {
         token: token,
         latitude: location.latitude,
         longitude: location.longitude,
-      });
+      }, attendanceRequestConfig);
 
       sessionStorage.removeItem('attendance_verify_token');
+      clearAttendanceClientId();
       setStep('success');
     } catch (err: any) {
       if (err.response?.status === 409) {
