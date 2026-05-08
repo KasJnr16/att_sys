@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import api, { handleApiError } from '@/lib/api';
+import api, { ApiRequestConfig, handleApiError } from '@/lib/api';
 import { User } from '@/types';
 import { clearAuthSession, persistAuthRole, persistAuthToken } from '@/lib/auth-storage';
 
@@ -55,7 +55,9 @@ export const useAuth = () => {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-      });
+        skipAuthRedirect: true,
+        toast: false,
+      } as ApiRequestConfig);
       persistAuthToken(response.data.access_token);
       await fetchUser();
       return { success: true };

@@ -17,8 +17,10 @@ from app.schemas.attendance import (
     AttendanceJoinRequest, AttendanceVerifyRequest
 )
 from app.api import deps
+from app.api.deps import RoleChecker
 from app.models.user import User
 from app.services.attendance_service import AttendanceService
+from app.services.class_access import get_session_access
 from app.services.webauthn_service import WebAuthnService
 
 router = APIRouter()
@@ -71,8 +73,10 @@ async def create_attendance_session(
     *,
     db: AsyncSession = Depends(get_db),
     session_in: AttendanceSessionCreate,
-    current_user: User = Depends(deps.get_current_active_user)
+    current_user: User = Depends(RoleChecker(["lecturer", "admin"]))
 ) -> Any:
+    await get_session_access(db, session_in.class_session_id, current_user, require_edit=True)
+
     db_obj, token = await AttendanceService.create_session(
         db,
         session_in.class_session_id,
@@ -94,7 +98,7 @@ async def create_attendance_session(
 async def get_attendance_session_status(
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(deps.get_current_active_user)
+    current_user: User = Depends(RoleChecker(["lecturer", "admin"]))
 ) -> Any:
     result = await db.execute(
         select(AttendanceSession)
@@ -104,6 +108,8 @@ async def get_attendance_session_status(
     session = result.scalars().first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    await get_session_access(db, session.class_session_id, current_user)
     
     return {
         "id": session.id,
@@ -120,7 +126,7 @@ async def get_attendance_session_status(
 async def close_attendance_session(
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(deps.get_current_active_user)
+    current_user: User = Depends(RoleChecker(["lecturer", "admin"]))
 ) -> Any:
     result = await db.execute(
         select(AttendanceSession)
@@ -130,6 +136,8 @@ async def close_attendance_session(
     session = result.scalars().first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    await get_session_access(db, session.class_session_id, current_user, require_edit=True)
     
     session.is_active = False
     session.expires_at = datetime.now(timezone.utc)

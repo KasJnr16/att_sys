@@ -12,6 +12,7 @@ python-multipart
 structlog
 slowapi
 email-validator
+resend
 pytest
 httpx
 pytest-asyncio

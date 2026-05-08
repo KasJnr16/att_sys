@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 import { BookOpen, Users, ArrowRight, Trash2 } from 'lucide-react';
@@ -20,11 +19,13 @@ interface ClassData {
   semester: number;
   academic_year: string;
   student_count?: number;
+  can_edit?: boolean;
+  is_owner?: boolean;
+  share_permission?: string;
 }
 
 export default function LecturerClassesPage() {
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -98,13 +99,15 @@ export default function LecturerClassesPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Badge variant="info">{cls.course.course_code}</Badge>
-                      <button
-                        onClick={(e) => confirmDelete(cls, e)}
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete class"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {cls.is_owner ? (
+                        <button
+                          onClick={(e) => confirmDelete(cls, e)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete class"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
                     </div>
                     <span className="text-xs font-medium text-slate-400">
                       Section {cls.section || 'A'}
@@ -117,6 +120,11 @@ export default function LecturerClassesPage() {
                   <p className="text-sm text-slate-500 mb-4">
                     Semester {cls.semester}, {cls.academic_year}
                   </p>
+                  {!cls.is_owner && cls.share_permission ? (
+                    <p className="text-xs text-slate-400 mb-4 uppercase tracking-wide">
+                      Shared {cls.share_permission}
+                    </p>
+                  ) : null}
 
                   <div className="mt-auto flex items-center gap-4 text-sm text-slate-500 pb-4">
                     <div className="flex items-center gap-1.5">

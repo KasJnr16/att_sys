@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Time, Date, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Time, Date, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -33,6 +33,12 @@ class Class(Base):
     course = relationship("Course")
     lecturer = relationship("Lecturer")
     sessions = relationship("ClassSession", back_populates="parent_class")
+    shares = relationship("ClassShare", back_populates="parent_class", cascade="all, delete-orphan")
+
+
+class SharePermission(str, enum.Enum):
+    view = "view"
+    edit = "edit"
 
 class SessionStatus(str, enum.Enum):
     scheduled = "scheduled"
@@ -51,3 +57,22 @@ class ClassSession(Base):
 
     parent_class = relationship("Class", back_populates="sessions")
     attendance_records = relationship("AttendanceRecord", back_populates="class_session")
+
+
+class ClassShare(Base):
+    __tablename__ = "class_share"
+
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("class.id", ondelete="CASCADE"), nullable=False)
+    lecturer_id = Column(Integer, ForeignKey("lecturer.id", ondelete="CASCADE"), nullable=False)
+    permission = Column(Enum(SharePermission), nullable=False, default=SharePermission.view)
+    shared_by_user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    parent_class = relationship("Class", back_populates="shares")
+    lecturer = relationship("Lecturer")
+    shared_by = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint("class_id", "lecturer_id", name="_class_share_lecturer_uc"),
+    )

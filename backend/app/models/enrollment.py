@@ -12,6 +12,7 @@ class AttendanceStatus(str, enum.Enum):
 
 class VerificationMethod(str, enum.Enum):
     webauthn = "webauthn"
+    manual = "manual"
 
 class Enrollment(Base):
     id = Column(Integer, primary_key=True, index=True)

@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     ORIGIN: AnyHttpUrl
     BACKEND_CORS_ORIGINS: Annotated[list[str], NoDecode] = []
 
+    RESEND_API_KEY: Optional[str] = None
+    RESEND_FROM_EMAIL: str = "onboarding@resend.dev"
+    EMAIL_FROM_NAME: str = "UniAtt"
+    AUTH_TOKEN_EXPIRE_MINUTES: int = 60
+    EMAIL_VERIFICATION_CODE_EXPIRE_MINUTES: int = 15
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> list[str]:

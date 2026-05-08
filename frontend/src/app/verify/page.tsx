@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { CheckCircle2, Fingerprint, User, XCircle, Clock, GraduationCap, AlertCircle, KeyRound } from 'lucide-react';
@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import Link from 'next/link';
 import { getBrowserLocation } from '@/lib/geolocation';
 import { clearAttendanceClientId, getOrCreateAttendanceClientId } from '@/lib/attendanceClient';
+import type { ApiRequestConfig } from '@/lib/api';
 
 type Step = 'loading' | 'code' | 'identify' | 'register' | 'fingerprint' | 'confirm' | 'success' | 'error' | 'expired';
 
@@ -72,9 +73,11 @@ function VerifyContent() {
     setAttendanceClientId(getOrCreateAttendanceClientId());
   }, [urlToken]);
 
-  const attendanceRequestConfig = attendanceClientId
-    ? { headers: { 'X-Attendance-Client': attendanceClientId } }
-    : undefined;
+  const attendanceRequestConfig = useMemo<ApiRequestConfig>(() => ({
+    ...(attendanceClientId ? { headers: { 'X-Attendance-Client': attendanceClientId } } : {}),
+    skipAuthRedirect: true,
+    toast: false,
+  }), [attendanceClientId]);
 
   useEffect(() => {
     const init = async () => {
@@ -85,7 +88,7 @@ function VerifyContent() {
       }
 
       try {
-        const response = await api.post('/validate-token', { token });
+        const response = await api.post('/validate-token', { token }, attendanceRequestConfig);
         const data = response.data;
 
         if (!data.valid) {
@@ -130,7 +133,7 @@ function VerifyContent() {
     if (token) {
       init();
     }
-  }, [token]);
+  }, [token, attendanceRequestConfig]);
 
   const handleCodeVerify = async () => {
     if (!token) {

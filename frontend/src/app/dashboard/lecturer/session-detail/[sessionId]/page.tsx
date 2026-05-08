@@ -3,10 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { ArrowLeft, Calendar, Clock, Users, CheckCircle } from 'lucide-react';
+import type { ApiRequestConfig } from '@/lib/api';
+import { ArrowLeft, Calendar, Users, CheckCircle, PlusCircle } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import { Loader } from '@/components/ui/Loader';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { toast } from '@/lib/toast';
 
 interface AttendanceRecord {
   student: {
@@ -14,6 +18,7 @@ interface AttendanceRecord {
     student_index: string;
   };
   verified_at: string;
+  verification_method: string;
 }
 
 interface SessionDetails {
@@ -22,6 +27,7 @@ interface SessionDetails {
   status: string;
   attendance_session_id: number | null;
   class_id: number;
+  can_edit: boolean;
   attendance_records: AttendanceRecord[];
 }
 
@@ -31,6 +37,10 @@ export default function SessionDetailPage() {
   const [session, setSession] = useState<SessionDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [studentIndex, setStudentIndex] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [submittingManual, setSubmittingManual] = useState(false);
 
   useEffect(() => {
     if (sessionId) {
@@ -58,6 +68,44 @@ export default function SessionDetailPage() {
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const resetManualForm = () => {
+    setStudentIndex('');
+    setFullName('');
+  };
+
+  const submitManualAttendance = async () => {
+    if (!session) {
+      return;
+    }
+
+    if (!studentIndex.match(/^\d{10}$/)) {
+      toast.error('Invalid index', 'Student index must be exactly 10 digits');
+      return;
+    }
+
+    setSubmittingManual(true);
+    try {
+      const response = await api.post(`/lecturer/sessions/${session.id}/manual-attendance`, {
+        student_index: studentIndex,
+        full_name: fullName.trim() || undefined,
+      }, {
+        toast: false,
+      } as ApiRequestConfig);
+      const createdStudent = response.data?.created_student;
+      toast.success(
+        'Attendance added',
+        createdStudent ? 'Student was created and marked present manually' : 'Student was marked present manually',
+      );
+      setShowManualModal(false);
+      resetManualForm();
+      await fetchSessionDetails();
+    } catch (err: any) {
+      toast.error('Could not add attendance', err.response?.data?.detail || 'Please try again.');
+    } finally {
+      setSubmittingManual(false);
+    }
   };
 
   if (loading) {
@@ -103,6 +151,13 @@ export default function SessionDetailPage() {
             <p className="text-gray-500 mt-1">
               Session #{session.id}
             </p>
+          </div>
+          <div className="ml-auto">
+            {session.status === 'closed' && session.can_edit ? (
+              <Button onClick={() => setShowManualModal(true)} leftIcon={<PlusCircle className="h-4 w-4" />}>
+                Add Fallback Attendance
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -161,7 +216,9 @@ export default function SessionDetailPage() {
                   </div>
                   <div className="flex items-center gap-2 text-green-600">
                     <CheckCircle className="h-4 w-4" />
-                    <span className="text-sm font-medium">Present</span>
+                    <span className="text-sm font-medium">
+                      {record.verification_method === 'manual' ? 'Present - Manual' : 'Present'}
+                    </span>
                   </div>
                 </div>
               ))
@@ -174,6 +231,64 @@ export default function SessionDetailPage() {
           </div>
         </Card>
       </div>
+
+      <Modal
+        isOpen={showManualModal}
+        onClose={() => {
+          setShowManualModal(false);
+          resetManualForm();
+        }}
+        title="Add Fallback Attendance"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Use this only for students who could not complete attendance because of issues outside their control.
+            If the student does not exist yet, the system will create their student record before marking them present.
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Student Index</label>
+            <input
+              type="text"
+              value={studentIndex}
+              onChange={(event) => setStudentIndex(event.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="0321080178"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Required only if this student is new"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowManualModal(false);
+                resetManualForm();
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={submitManualAttendance}
+              isLoading={submittingManual}
+              className="flex-1"
+            >
+              Save Attendance
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </DashboardLayout>
   );
 }

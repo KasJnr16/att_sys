@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Loader } from '@/components/ui/Loader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { ArrowLeft, Download, Calendar, Users, BookOpen, Check, X } from 'lucide-react';
+import { ArrowLeft, Download, Calendar, Users, BookOpen, Check, X, Flag, Filter } from 'lucide-react';
 
 interface AttendanceRecord {
   session_id: number;
@@ -44,6 +44,8 @@ interface AttendanceMatrixData {
   rows: AttendanceRow[];
 }
 
+type AttendanceFilterMode = 'all' | 'flagged' | 'exact' | 'range';
+
 const getExcelColumnName = (columnNumber: number) => {
   let dividend = columnNumber;
   let columnName = '';
@@ -63,6 +65,10 @@ export default function AttendanceHistoryPage() {
   const [data, setData] = useState<AttendanceMatrixData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTimestamps, setShowTimestamps] = useState(true);
+  const [filterMode, setFilterMode] = useState<AttendanceFilterMode>('all');
+  const [exactAttendanceCount, setExactAttendanceCount] = useState('');
+  const [minAttendanceCount, setMinAttendanceCount] = useState('');
+  const [maxAttendanceCount, setMaxAttendanceCount] = useState('');
 
   useEffect(() => {
     if (classId) {
@@ -102,14 +108,19 @@ export default function AttendanceHistoryPage() {
 
     const studentStats = data.rows.map((row) => {
       const present = row.attendance.filter((a) => a.status === 'present').length;
+      const missed = Math.max(totalSessions - present, 0);
       return {
         studentId: row.student.id,
         present,
+        missed,
+        isFlagged: missed >= 3,
         percentage: totalSessions > 0 ? Math.round((present / totalSessions) * 100) : 0,
       };
     });
 
-    return { totalStudents, totalSessions, sessionStats, studentStats };
+    const flaggedStudents = studentStats.filter((studentStat) => studentStat.isFlagged).length;
+
+    return { totalStudents, totalSessions, sessionStats, studentStats, flaggedStudents };
   }, [data]);
 
   const getStudentStats = useCallback(
@@ -125,6 +136,46 @@ export default function AttendanceHistoryPage() {
     },
     [stats]
   );
+
+  const getRowAttendanceStats = useCallback(
+    (row: AttendanceRow) => {
+      return stats?.studentStats.find((s) => s.studentId === row.student.id);
+    },
+    [stats]
+  );
+
+  const filteredRows = useMemo(() => {
+    if (!data || !stats) return [];
+
+    return data.rows.filter((row) => {
+      const studentStats = getRowAttendanceStats(row);
+      const present = studentStats?.present ?? 0;
+
+      if (filterMode === 'flagged') {
+        return Boolean(studentStats?.isFlagged);
+      }
+
+      if (filterMode === 'exact') {
+        if (exactAttendanceCount === '') return true;
+        return present === Number(exactAttendanceCount);
+      }
+
+      if (filterMode === 'range') {
+        const min = minAttendanceCount === '' ? 0 : Number(minAttendanceCount);
+        const max = maxAttendanceCount === '' ? stats.totalSessions : Number(maxAttendanceCount);
+        return present >= min && present <= max;
+      }
+
+      return true;
+    });
+  }, [data, exactAttendanceCount, filterMode, getRowAttendanceStats, maxAttendanceCount, minAttendanceCount, stats]);
+
+  const resetAttendanceFilters = () => {
+    setFilterMode('all');
+    setExactAttendanceCount('');
+    setMinAttendanceCount('');
+    setMaxAttendanceCount('');
+  };
 
   const exportAttendanceTable = async () => {
     if (!data) return;
@@ -175,7 +226,8 @@ export default function AttendanceHistoryPage() {
       border: true,
     });
 
-    const tableRows = data.rows.map((row) => [
+    const exportRows = filteredRows.length > 0 || data.rows.length === 0 ? filteredRows : data.rows;
+    const tableRows = exportRows.map((row) => [
       row.student.student_index,
       row.student.full_name,
       ...data.sessions.map((session) => {
@@ -265,7 +317,7 @@ export default function AttendanceHistoryPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card className="border-none bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
@@ -299,7 +351,95 @@ export default function AttendanceHistoryPage() {
               </div>
             </div>
           </Card>
+          <Card className="border-none bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
+                <Flag className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-rose-100">Missed 3+ Classes</p>
+                <p className="text-2xl font-bold">{stats?.flaggedStudents || 0}</p>
+              </div>
+            </div>
+          </Card>
         </div>
+
+        <Card className="p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Filter className="h-4 w-4 text-indigo-600" />
+                Attendance Filters
+              </div>
+              <p className="mt-1 text-sm text-slate-500">
+                Showing {filteredRows.length} of {data.rows.length} students. Students who missed 3 or more classes are flagged automatically.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-4 xl:min-w-[46rem]">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">View</label>
+                <select
+                  value={filterMode}
+                  onChange={(event) => setFilterMode(event.target.value as AttendanceFilterMode)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="all">All students</option>
+                  <option value="flagged">Missed 3+ classes</option>
+                  <option value="exact">Exact attended</option>
+                  <option value="range">Attendance range</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Exact</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={stats?.totalSessions || 0}
+                  value={exactAttendanceCount}
+                  onChange={(event) => setExactAttendanceCount(event.target.value)}
+                  disabled={filterMode !== 'exact'}
+                  placeholder="e.g. 4"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Min</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={stats?.totalSessions || 0}
+                  value={minAttendanceCount}
+                  onChange={(event) => setMinAttendanceCount(event.target.value)}
+                  disabled={filterMode !== 'range'}
+                  placeholder="0"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Max</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={stats?.totalSessions || 0}
+                    value={maxAttendanceCount}
+                    onChange={(event) => setMaxAttendanceCount(event.target.value)}
+                    disabled={filterMode !== 'range'}
+                    placeholder={`${stats?.totalSessions || 0}`}
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-400"
+                  />
+                  <Button variant="secondary" size="sm" onClick={resetAttendanceFilters}>
+                    Reset
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {data.sessions.length === 0 ? (
           <Card className="p-12 text-center">
@@ -339,19 +479,32 @@ export default function AttendanceHistoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.rows.map((row, rowIndex) => {
+                  {filteredRows.map((row, rowIndex) => {
                     const studentStats = getStudentStats(row.student.id);
                     const isEven = rowIndex % 2 === 0;
                     return (
                       <tr
                         key={row.student.id}
-                        className={`${isEven ? 'bg-white' : 'bg-slate-50/50'} transition-colors hover:bg-indigo-50/30`}
+                        className={`${
+                          studentStats?.isFlagged
+                            ? 'bg-rose-50/60'
+                            : isEven
+                            ? 'bg-white'
+                            : 'bg-slate-50/50'
+                        } transition-colors hover:bg-indigo-50/30`}
                       >
                         <td className="sticky left-0 z-10 border-r border-slate-200 bg-inherit px-4 py-3 font-mono text-gray-600">
                           {row.student.student_index}
                         </td>
                         <td className="sticky left-[100px] z-10 border-r border-slate-200 bg-inherit px-4 py-3 font-medium text-gray-900">
-                          {row.student.full_name}
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <span className="truncate">{row.student.full_name}</span>
+                            {studentStats?.isFlagged ? (
+                              <Badge variant="danger" className="w-fit" dot>
+                                Missed {studentStats.missed} classes
+                              </Badge>
+                            ) : null}
+                          </div>
                         </td>
                         {row.attendance.map((att) => {
                           const isPresent = att.status === 'present';
@@ -383,21 +536,36 @@ export default function AttendanceHistoryPage() {
                           );
                         })}
                         <td className="bg-slate-50 px-4 py-3 text-center font-semibold">
-                          <span
-                            className={`${
-                              (studentStats?.percentage || 0) >= 75
-                                ? 'text-emerald-600'
-                                : (studentStats?.percentage || 0) >= 50
-                                ? 'text-amber-600'
-                                : 'text-red-600'
-                            }`}
-                          >
-                            {studentStats?.percentage || 0}%
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span
+                              className={`${
+                                (studentStats?.percentage || 0) >= 75
+                                  ? 'text-emerald-600'
+                                  : (studentStats?.percentage || 0) >= 50
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
+                              }`}
+                            >
+                              {studentStats?.percentage || 0}%
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-500">
+                              {studentStats?.present || 0}/{stats?.totalSessions || 0}
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     );
                   })}
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={data.sessions.length + 3}
+                        className="px-6 py-12 text-center text-sm text-slate-500"
+                      >
+                        No students match the current attendance filter.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-800 text-xs font-semibold text-white">
@@ -436,7 +604,7 @@ export default function AttendanceHistoryPage() {
 
         <div className="flex items-center justify-between text-sm text-gray-500">
           <p>
-            Showing {data.rows.length} student{data.rows.length !== 1 ? 's' : ''} across {data.sessions.length} session
+            Showing {filteredRows.length} of {data.rows.length} student{data.rows.length !== 1 ? 's' : ''} across {data.sessions.length} session
             {data.sessions.length !== 1 ? 's' : ''}
           </p>
           <p>Last updated: {new Date().toLocaleString()}</p>

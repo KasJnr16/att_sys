@@ -27,6 +27,9 @@ interface ClassData {
   academic_year: string;
   student_count?: number;
   session_count?: number;
+  can_edit?: boolean;
+  is_owner?: boolean;
+  share_permission?: string;
 }
 
 interface Programme {
@@ -280,8 +283,8 @@ export default function LecturerDashboard() {
         latitude: location.latitude,
         longitude: location.longitude,
         radius_meters: parseInt(getStoredAttendanceRadius(), 10),
-      });
-      window.location.href = `/dashboard/lecturer/session/${response.data.session_id}?token=${response.data.token}`;
+      }, { toast: false } as ApiRequestConfig);
+      router.push(`/dashboard/lecturer/session/${response.data.session_id}?token=${response.data.token}`);
     } catch (err) {
       console.error('Failed to start attendance', err);
       const message = err instanceof Error ? err.message : 'Unable to start attendance.';
@@ -419,6 +422,11 @@ export default function LecturerDashboard() {
                   <p className="text-sm text-slate-400 mb-4">
                     Semester {cls.semester}, {cls.academic_year}
                   </p>
+                  {!cls.is_owner && cls.share_permission ? (
+                    <p className="text-xs text-slate-400 mb-4 uppercase tracking-wide">
+                      Shared {cls.share_permission}
+                    </p>
+                  ) : null}
 
                   <div className="mt-auto flex items-center gap-4 text-sm text-slate-500 pb-4">
                     <div className="flex items-center gap-1.5">
@@ -438,7 +446,7 @@ export default function LecturerDashboard() {
                       size="sm"
                       leftIcon={<Play className="h-3.5 w-3.5 fill-current" />}
                     >
-                      Take Attendance
+                      {cls.can_edit ? 'Manage Class' : 'View Class'}
                     </Button>
                   </div>
                 </div>

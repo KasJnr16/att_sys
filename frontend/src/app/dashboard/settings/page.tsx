@@ -156,7 +156,7 @@ export default function SettingsPage() {
           </div>
 
           <form onSubmit={handlePasswordSubmit} className="space-y-6">
-            <div className="pt-4 border-t border-slate-100">
+            <div className="pt-4 border-slate-100">
               <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2">
                 <Lock className="h-4 w-4" />
                 Change Password
@@ -192,7 +192,7 @@ export default function SettingsPage() {
         {user?.role?.name === 'lecturer' && (
           <Card>
             <form onSubmit={handleAttendancePrefsSubmit} className="space-y-6">
-              <div className="pb-6 border-b border-slate-100">
+              <div className="pb-6 border-slate-100">
                 <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                   <Clock className="h-4 w-4" />
                   Attendance Preferences
@@ -239,7 +239,7 @@ export default function SettingsPage() {
         <Card>
           <h3 className="text-sm font-semibold text-slate-900 mb-4">Account Information</h3>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b border-slate-50">
+            <div className="flex justify-between py-2 border-slate-50">
               <span className="text-slate-500">Role</span>
               <span className="font-medium text-slate-900 capitalize">{user?.role?.name || 'N/A'}</span>
             </div>

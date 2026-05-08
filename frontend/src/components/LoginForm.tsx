@@ -8,11 +8,14 @@ import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { Alert } from './ui/Alert';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/lib/toast';
 
 const schema = z.object({
   email: z.string().email('Please enter a valid university email'),
   password: z.string().min(1, 'Password is required'),
 });
+
+const NOTICE_NAVIGATION_DELAY_MS = 1200;
 
 type FormData = z.infer<typeof schema>;
 
@@ -49,9 +52,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     try {
       const result = await authLogin(data.email, data.password);
       if (result.success) {
+        toast.success('Signed in successfully', 'Opening your dashboard...', 3000);
+        await new Promise((resolve) => window.setTimeout(resolve, NOTICE_NAVIGATION_DELAY_MS));
         if (onSuccess) onSuccess();
       } else {
-        setError(result.error || 'Unable to sign in. Please try again.');
+        const message = result.error || 'Unable to sign in. Please try again.';
+        setError(message);
+        toast.error('Could not sign in', message, 6000);
       }
     } finally {
       setSubmitting(false);
@@ -130,9 +137,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
       <div className="mt-6 text-center">
         <p className="text-sm text-slate-500">
-          Need help?{' '}
-          <Link href="/help" className="font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
-            Contact support
+          Forgot your password?{' '}
+          <Link href="/auth/reset-password" className="font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
+            Reset it
           </Link>
         </p>
       </div>

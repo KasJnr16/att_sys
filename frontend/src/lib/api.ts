@@ -23,10 +23,12 @@ export interface RequestToastOptions {
 
 export interface ApiRequestConfig<D = unknown> extends AxiosRequestConfig<D> {
   toast?: boolean | RequestToastOptions;
+  skipAuthRedirect?: boolean;
 }
 
 type RequestConfigWithToast = InternalAxiosRequestConfig & {
   toast?: boolean | RequestToastOptions;
+  skipAuthRedirect?: boolean;
 };
 
 const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete']);
@@ -132,14 +134,14 @@ api.interceptors.response.use(
       );
     }
 
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !config?.skipAuthRedirect) {
       if (typeof window !== 'undefined') {
         clearAuthSession();
         window.location.href = '/auth/lecturer';
       }
     }
 
-    if (error.response?.status === 403) {
+    if (error.response?.status === 403 && !config?.skipAuthRedirect) {
       if (typeof window !== 'undefined') {
         window.location.href = '/dashboard';
       }

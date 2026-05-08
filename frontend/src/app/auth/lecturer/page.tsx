@@ -8,10 +8,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { GraduationCap, BookOpen, QrCode, BarChart3, Shield, Mail, Lock } from 'lucide-react';
 import api from '@/lib/api';
+import type { ApiRequestConfig } from '@/lib/api';
 import { LoginForm } from '@/components/LoginForm';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { toast } from '@/lib/toast';
 
 const createAccountSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -57,13 +59,19 @@ export default function LecturerAuthPage() {
         email: data.email,
         password: data.password,
         role_id: 2,
-      });
-      setMessage({ type: 'success', text: 'Account created successfully! You can sign in now.' });
-      setShowCreateAccount(false);
+      }, {
+        skipAuthRedirect: true,
+        toast: false,
+      } as ApiRequestConfig);
+      setMessage({ type: 'success', text: 'Account created successfully. Check your email to verify it.' });
+      toast.success('Check your email', 'Use the verification link or code to finish setup.', 6000);
       resetCreate();
+      router.push(`/auth/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
-      setGlobalError(error.response?.data?.detail || 'Unable to create account. Contact an administrator.');
+      const message = error.response?.data?.detail || 'Unable to create account. Contact an administrator.';
+      setGlobalError(message);
+      toast.error('Could not create account', message, 6000);
     } finally {
       setLoading(false);
     }

@@ -4,7 +4,7 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, Play, Users, Calendar, BookOpen, Clock, Trash2, Eye } from 'lucide-react';
+import { ArrowLeft, Play, Users, Calendar, BookOpen, Clock, Trash2, Eye, Share2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -38,7 +38,22 @@ interface ClassDetail {
   semester: number;
   academic_year: string;
   student_count?: number;
+  can_edit?: boolean;
+  is_owner?: boolean;
+  share_permission?: string;
   sessions: ClassSession[];
+}
+
+interface LecturerOption {
+  id: number;
+  full_name: string;
+  email?: string | null;
+}
+
+interface ClassShareItem {
+  id: number;
+  permission: 'view' | 'edit';
+  lecturer: LecturerOption | null;
 }
 
 const EXPIRATION_OPTIONS = [
@@ -63,9 +78,18 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
   const [radiusMeters, setRadiusMeters] = useState(DEFAULT_ATTENDANCE_RADIUS);
   const [startingSession, setStartingSession] = useState(false);
   const [deletingSession, setDeletingSession] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [lecturerOptions, setLecturerOptions] = useState<LecturerOption[]>([]);
+  const [classShares, setClassShares] = useState<ClassShareItem[]>([]);
+  const [selectedLecturerId, setSelectedLecturerId] = useState<string | number>('');
+  const [sharePermission, setSharePermission] = useState<'view' | 'edit'>('view');
+  const [loadingShares, setLoadingShares] = useState(false);
+  const [savingShare, setSavingShare] = useState(false);
+  const [updatingShareId, setUpdatingShareId] = useState<number | null>(null);
+  const [removingShareId, setRemovingShareId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (user && user.role?.name === 'lecturer') {
+    if (user && (user.role?.name === 'lecturer' || user.role?.name === 'admin')) {
       fetchClassDetail();
       const pollInterval = setInterval(fetchClassDetail, 30000);
       return () => clearInterval(pollInterval);
@@ -121,7 +145,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
         latitude: location.latitude,
         longitude: location.longitude,
         radius_meters: parseInt(radiusMeters, 10),
-      });
+      }, { toast: false } as ApiRequestConfig);
       
       setShowSettingsModal(false);
       router.push(`/dashboard/lecturer/session/${response.data.session_id}?token=${response.data.token}`);
@@ -151,6 +175,80 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
       console.error('Failed to delete session', err);
     } finally {
       setDeletingSession(false);
+    }
+  };
+
+  const openShareModal = async () => {
+    setShowShareModal(true);
+    setLoadingShares(true);
+    try {
+      const [lecturersRes, sharesRes] = await Promise.all([
+        api.get('/lecturer/lecturers/search'),
+        api.get(`/lecturer/classes/${id}/shares`),
+      ]);
+      setLecturerOptions(lecturersRes.data);
+      setClassShares(sharesRes.data);
+    } catch (err) {
+      console.error('Failed to load share data', err);
+      toast.error('Could not load sharing', 'Please try again.');
+    } finally {
+      setLoadingShares(false);
+    }
+  };
+
+  const createShare = async () => {
+    if (!selectedLecturerId) {
+      toast.error('Select lecturer', 'Choose a lecturer to share this class with.');
+      return;
+    }
+
+    setSavingShare(true);
+    try {
+      await api.post(`/lecturer/classes/${id}/shares`, {
+        lecturer_id: Number(selectedLecturerId),
+        permission: sharePermission,
+      });
+      const sharesRes = await api.get(`/lecturer/classes/${id}/shares`);
+      setClassShares(sharesRes.data);
+      setSelectedLecturerId('');
+      setSharePermission('view');
+    } catch (err: any) {
+      toast.error('Could not share class', err.response?.data?.detail || 'Please try again.');
+    } finally {
+      setSavingShare(false);
+    }
+  };
+
+  const updateSharePermission = async (share: ClassShareItem, permission: 'view' | 'edit') => {
+    if (!share.lecturer || share.permission === permission) {
+      return;
+    }
+
+    setUpdatingShareId(share.id);
+    try {
+      await api.put(`/lecturer/classes/${id}/shares/${share.id}`, {
+        lecturer_id: share.lecturer.id,
+        permission,
+      });
+      setClassShares((current) =>
+        current.map((item) => (item.id === share.id ? { ...item, permission } : item))
+      );
+    } catch (err: any) {
+      toast.error('Could not update access', err.response?.data?.detail || 'Please try again.');
+    } finally {
+      setUpdatingShareId(null);
+    }
+  };
+
+  const removeShare = async (shareId: number) => {
+    setRemovingShareId(shareId);
+    try {
+      await api.delete(`/lecturer/classes/${id}/shares/${shareId}`);
+      setClassShares((current) => current.filter((item) => item.id !== shareId));
+    } catch (err: any) {
+      toast.error('Could not remove access', err.response?.data?.detail || 'Please try again.');
+    } finally {
+      setRemovingShareId(null);
     }
   };
 
@@ -191,17 +289,31 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">{classDetail.course.course_name}</h1>
               <Badge variant="info">{classDetail.course.course_code}</Badge>
+              {!classDetail.is_owner && classDetail.share_permission ? (
+                <Badge variant={classDetail.share_permission === 'edit' ? 'success' : 'gray'}>
+                  Shared {classDetail.share_permission}
+                </Badge>
+              ) : null}
             </div>
             <p className="text-gray-500 mt-1">
               Semester {classDetail.semester} &bull; Section {classDetail.section || 'A'} &bull; {classDetail.academic_year}
             </p>
           </div>
-          <Button
-            onClick={openSettingsModal}
-            leftIcon={<Play className="h-4 w-4 fill-current" />}
-          >
-            Take Attendance
-          </Button>
+          <div className="flex items-center gap-3">
+            {classDetail.is_owner ? (
+              <Button variant="secondary" onClick={openShareModal} leftIcon={<Share2 className="h-4 w-4" />}>
+                Share Class
+              </Button>
+            ) : null}
+            {classDetail.can_edit ? (
+              <Button
+                onClick={openSettingsModal}
+                leftIcon={<Play className="h-4 w-4 fill-current" />}
+              >
+                Take Attendance
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -304,13 +416,15 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => confirmDeleteSession(session.id)}
-                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete session"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {classDetail.can_edit ? (
+                          <button
+                            onClick={() => confirmDeleteSession(session.id)}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete session"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -319,9 +433,11 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                 <div className="px-6 py-12 text-center">
                   <Calendar className="h-10 w-10 text-gray-300 mx-auto" />
                   <p className="mt-4 text-gray-500">No sessions yet</p>
-                  <Button onClick={openSettingsModal} size="sm" className="mt-4">
-                    Start First Session
-                  </Button>
+                  {classDetail.can_edit ? (
+                    <Button onClick={openSettingsModal} size="sm" className="mt-4">
+                      Start First Session
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -435,6 +551,88 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
             >
               Delete
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showShareModal} onClose={() => setShowShareModal(false)} title="Share Class">
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Lecturer</label>
+              <SearchableSelect
+                options={lecturerOptions.map((lecturer) => ({
+                  value: lecturer.id,
+                  label: lecturer.email ? `${lecturer.full_name} (${lecturer.email})` : lecturer.full_name,
+                }))}
+                value={selectedLecturerId}
+                onChange={(value) => setSelectedLecturerId(value)}
+                placeholder="Search and select lecturer..."
+                allowClear
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Access Level</label>
+              <SearchableSelect
+                options={[
+                  { value: 'view', label: 'View only' },
+                  { value: 'edit', label: 'Edit access' },
+                ]}
+                value={sharePermission}
+                onChange={(value) => setSharePermission(value as 'view' | 'edit')}
+                placeholder="Select access level..."
+                searchable={false}
+              />
+            </div>
+
+            <Button onClick={createShare} isLoading={savingShare} fullWidth>
+              Save Share
+            </Button>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <h3 className="font-medium text-gray-900 mb-3">Current Shares</h3>
+            {loadingShares ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader size="md" />
+              </div>
+            ) : classShares.length === 0 ? (
+              <p className="text-sm text-gray-500">This class has not been shared yet.</p>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {classShares.map((share) => (
+                  <div key={share.id} className="rounded-xl border border-slate-100 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-gray-900">{share.lecturer?.full_name || 'Unknown lecturer'}</p>
+                        <p className="text-sm text-gray-500">{share.lecturer?.email || 'No email'}</p>
+                      </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => removeShare(share.id)}
+                        isLoading={removingShareId === share.id}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="mt-3">
+                      <SearchableSelect
+                        options={[
+                          { value: 'view', label: 'View only' },
+                          { value: 'edit', label: 'Edit access' },
+                        ]}
+                        value={share.permission}
+                        onChange={(value) => updateSharePermission(share, value as 'view' | 'edit')}
+                        searchable={false}
+                        className={updatingShareId === share.id ? 'opacity-70' : ''}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </Modal>

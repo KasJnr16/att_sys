@@ -19,6 +19,7 @@ from app.schemas.academic import (
 from app.api import deps
 from app.api.deps import RoleChecker
 from app.models.user import User
+from app.services.class_access import get_class_access
 
 router = APIRouter()
 
@@ -186,6 +187,11 @@ async def create_class_session(
     session_in: ClassSessionCreate,
     current_user: User = Depends(RoleChecker(["admin", "lecturer"]))
 ) -> Any:
+    if session_in.class_id != class_id:
+        raise HTTPException(status_code=400, detail="Session class does not match route")
+
+    await get_class_access(db, class_id, current_user, require_edit=True)
+
     db_obj = ClassSession(
         **session_in.dict(),
         created_by=current_user.id
@@ -238,14 +244,10 @@ async def delete_class(
     class_id: int,
     current_user: User = Depends(RoleChecker(["admin", "lecturer"]))
 ) -> Any:
-    result = await db.execute(select(Class).where(Class.id == class_id))
-    db_obj = result.scalars().first()
-    if not db_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
+    db_obj, _, is_owner = await get_class_access(db, class_id, current_user)
 
-    if current_user.role.name == "lecturer":
-        if not current_user.lecturer or db_obj.lecturer_id != current_user.lecturer.id:
-            raise HTTPException(status_code=403, detail="You can only delete your own classes")
+    if current_user.role.name == "lecturer" and not is_owner:
+        raise HTTPException(status_code=403, detail="Only the class owner can delete this class")
 
     await db.delete(db_obj)
     await db.commit()

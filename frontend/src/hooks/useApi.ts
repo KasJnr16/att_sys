@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import api, { handleApiError } from '@/lib/api';
+import api, { ApiRequestConfig, handleApiError } from '@/lib/api';
 import { clearAuthSession, persistAuthRole, persistAuthToken } from '@/lib/auth-storage';
 import { getStoredAttendanceRadius } from '@/lib/attendancePreferences';
 import { getBrowserLocation } from '@/lib/geolocation';
@@ -88,7 +88,9 @@ export function useAuth() {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-      });
+        skipAuthRedirect: true,
+        toast: false,
+      } as ApiRequestConfig);
       persistAuthToken(response.data.access_token);
       await fetchUser();
       return true;
@@ -139,7 +141,7 @@ export function useLecturerClasses() {
       const sessionRes = await api.post(`/academic/classes/${classId}/sessions`, {
         class_id: classId,
         session_date: now.toISOString().split('T')[0],
-      });
+      }, { toast: false } as ApiRequestConfig);
 
       const classSessionId = sessionRes.data.id;
 
@@ -150,7 +152,7 @@ export function useLecturerClasses() {
         latitude: location.latitude,
         longitude: location.longitude,
         radius_meters: parseInt(getStoredAttendanceRadius(), 10),
-      });
+      }, { toast: false } as ApiRequestConfig);
 
       return response.data;
     } catch (err) {

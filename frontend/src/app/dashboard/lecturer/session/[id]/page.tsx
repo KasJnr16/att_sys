@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '@/lib/api';
+import type { ApiRequestConfig } from '@/lib/api';
 import { Users, Clock, ArrowLeft, CheckCircle, Copy, X, KeyRound } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
@@ -135,13 +136,14 @@ function SessionDisplayContent() {
   };
 
   const copyLink = () => {
-    navigator.clipboard.writeText(joinUrl);
+    const formattedText = `${joinUrl}\n\nPasskey: ${sessionInfo.verification_code}`;
+    navigator.clipboard.writeText(formattedText);
   };
 
   const handleEndSession = async () => {
     setEndingSession(true);
     try {
-      const response = await api.post(`/attendance-sessions/${id}/close`);
+      const response = await api.post(`/attendance-sessions/${id}/close`, undefined, { toast: false } as ApiRequestConfig);
       clearStoredToken();
       setShowEndModal(false);
       const classId = response.data?.class_id ?? sessionInfo?.class_id;
