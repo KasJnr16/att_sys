@@ -95,3 +95,6 @@ class StudentLookupResponse(BaseModel):
     exists: bool
     has_webauthn: bool = False
     student_id: Optional[int] = None
+    student_index: Optional[str] = None
+    full_name: Optional[str] = None
+    programme_name: Optional[str] = None

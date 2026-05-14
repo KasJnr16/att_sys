@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, DateTime, Enum, String, UniqueConstraint
+from sqlalchemy import Column, Integer, ForeignKey, DateTime, Enum, String, UniqueConstraint, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -12,6 +12,7 @@ class AttendanceStatus(str, enum.Enum):
 
 class VerificationMethod(str, enum.Enum):
     webauthn = "webauthn"
+    session_code = "session_code"
     manual = "manual"
 
 class Enrollment(Base):
@@ -37,6 +38,10 @@ class AttendanceRecord(Base):
     credential_id = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
+    client_fingerprint = Column(String(64), nullable=True)
+    attendance_latitude = Column(Float, nullable=True)
+    attendance_longitude = Column(Float, nullable=True)
+    distance_meters = Column(Integer, nullable=True)
 
     student = relationship("Student")
     class_session = relationship("ClassSession", back_populates="attendance_records")

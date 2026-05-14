@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -435,8 +435,6 @@ async def get_student_registration_options(
 
 class VerifyStudentAttendanceRequest(BaseModel):
     student_id: int
-    authentication_response: dict
-    challenge: str
     token: str
     latitude: float
     longitude: float
@@ -476,24 +474,27 @@ async def verify_student_attendance(
             ),
         )
 
-    try:
-        student_id, credential = await WebAuthnService.verify_student_authentication(
-            db, request.authentication_response, request.challenge
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Identity verification failed: {str(e)}")
-
-    if student_id != request.student_id:
-        raise HTTPException(status_code=403, detail="Student ID mismatch")
+    student_result = await db.execute(
+        select(Student).where(Student.id == request.student_id)
+    )
+    student = student_result.scalars().first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
 
     client_ip = _get_client_ip(http_request)
     user_agent = http_request.headers.get("user-agent", "unknown")
+    client_fingerprint = _build_client_fingerprint(http_request)
     device_record = await db.execute(
         select(AttendanceRecord).where(
             AttendanceRecord.class_session_id == session.class_session_id,
-            AttendanceRecord.ip_address == client_ip,
-            AttendanceRecord.user_agent == user_agent,
-            AttendanceRecord.student_id != student_id,
+            or_(
+                AttendanceRecord.client_fingerprint == client_fingerprint,
+                (
+                    (AttendanceRecord.ip_address == client_ip)
+                    & (AttendanceRecord.user_agent == user_agent)
+                ),
+            ),
+            AttendanceRecord.student_id != request.student_id,
         )
     )
     if device_record.scalars().first():
@@ -504,7 +505,7 @@ async def verify_student_attendance(
 
     existing = await db.execute(
         select(AttendanceRecord).where(
-            AttendanceRecord.student_id == student_id,
+            AttendanceRecord.student_id == request.student_id,
             AttendanceRecord.class_session_id == session.class_session_id
         )
     )
@@ -512,13 +513,16 @@ async def verify_student_attendance(
         raise HTTPException(status_code=409, detail="Attendance already recorded")
 
     db_record = AttendanceRecord(
-        student_id=student_id,
+        student_id=request.student_id,
         class_session_id=session.class_session_id,
         status="present",
-        verification_method="webauthn",
-        credential_id=credential.credential_id,
+        verification_method="session_code",
         ip_address=client_ip,
         user_agent=user_agent,
+        client_fingerprint=client_fingerprint,
+        attendance_latitude=request.latitude,
+        attendance_longitude=request.longitude,
+        distance_meters=int(round(distance or 0)) if distance is not None else None,
     )
     db.add(db_record)
 
@@ -526,11 +530,6 @@ async def verify_student_attendance(
 
     await db.commit()
     await db.refresh(db_record)
-
-    result = await db.execute(
-        select(Student).where(Student.id == student_id)
-    )
-    student = result.scalars().first()
 
     return {
         "success": True,

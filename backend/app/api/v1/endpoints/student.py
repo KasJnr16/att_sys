@@ -12,7 +12,6 @@ from app.models.academic import Class, Programme
 from app.models.attendance import AttendanceSession
 from app.models.enrollment import Enrollment, AttendanceRecord
 from app.models.user import User, Student, Role
-from app.models.webauthn import WebAuthnCredential
 from app.schemas.academic import Class as ClassSchema
 from app.schemas.attendance import AttendanceRecord as AttendanceRecordSchema
 from app.schemas.user import StudentLookupResponse
@@ -76,16 +75,13 @@ async def lookup_student(
     if not student:
         return {"exists": False, "has_webauthn": False, "student_id": None}
 
-    result = await db.execute(
-        select(WebAuthnCredential).where(WebAuthnCredential.student_id == student.id)
-    )
-    credentials = result.scalars().all()
-    has_webauthn = len(credentials) > 0
-
     return {
         "exists": True,
-        "has_webauthn": has_webauthn,
+        "has_webauthn": False,
         "student_id": student.id,
+        "student_index": student.student_index,
+        "full_name": student.full_name,
+        "programme_name": student.programme.name if student.programme else None,
     }
 
 

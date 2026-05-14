@@ -58,3 +58,5 @@ class AttendanceFeedRecord(BaseModel):
     verified_at: datetime
     verification_method: str
     student: AttendanceFeedStudent
+    distance_meters: Optional[int] = None
+    suspicious_reason: Optional[str] = None

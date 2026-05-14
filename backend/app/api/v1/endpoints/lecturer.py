@@ -599,14 +599,31 @@ async def get_session_attendance(
     )
     records = result.scalars().all()
 
-    return [
-        {
+    attendance_session_result = await db.execute(
+        select(AttendanceSession).where(AttendanceSession.class_session_id == session_id)
+    )
+    active_attendance_session = attendance_session_result.scalars().first()
+
+    feed = []
+    for record in records:
+        suspicious_reason = None
+        if (
+            active_attendance_session
+            and record.distance_meters is not None
+            and active_attendance_session.attendance_radius_meters
+            and record.distance_meters >= int(active_attendance_session.attendance_radius_meters * 0.8)
+        ):
+            suspicious_reason = "Near attendance boundary"
+
+        feed.append({
             "id": record.id,
             "student_id": record.student_id,
             "class_session_id": record.class_session_id,
             "status": record.status.value if hasattr(record.status, "value") else str(record.status),
             "verified_at": record.verified_at,
             "verification_method": record.verification_method.value if hasattr(record.verification_method, "value") else str(record.verification_method),
+            "distance_meters": record.distance_meters,
+            "suspicious_reason": suspicious_reason,
             "student": {
                 "id": record.student.id,
                 "student_index": record.student.student_index,
@@ -616,9 +633,9 @@ async def get_session_attendance(
                 "student_index": "N/A",
                 "full_name": "Unknown Student",
             },
-        }
-        for record in records
-    ]
+        })
+
+    return feed
 
 @router.get("/classes/{class_id}/attendance-matrix", response_model=Any)
 async def get_class_attendance_matrix(

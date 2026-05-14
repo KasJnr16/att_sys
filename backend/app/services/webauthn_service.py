@@ -343,6 +343,10 @@ class WebAuthnService:
         if not student_id:
             raise ValueError("Student ID not found in challenge")
 
+        # Validate that the credential belongs to the student being authenticated
+        if db_credential.student_id != student_id:
+            raise ValueError("Credential does not belong to this student")
+
         result = await db.execute(
             select(Student).where(Student.id == student_id).options(selectinload(Student.programme))
         )

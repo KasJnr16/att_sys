@@ -20,6 +20,8 @@ interface AttendanceFeedRecord {
   verified_at: string;
   status: string;
   verification_method: string;
+  distance_meters?: number | null;
+  suspicious_reason?: string | null;
   student: {
     id: number;
     student_index: string;
@@ -136,7 +138,7 @@ function SessionDisplayContent() {
   };
 
   const copyLink = () => {
-    const formattedText = `${joinUrl}\n\nPasskey: ${sessionInfo.verification_code}`;
+    const formattedText = `UniAtt\nLink: ${joinUrl}\nPasskey: ${sessionInfo.verification_code}`;
     navigator.clipboard.writeText(formattedText);
   };
 
@@ -202,13 +204,13 @@ function SessionDisplayContent() {
                 <KeyRound className="h-7 w-7" />
               </div>
               <div>
-                <p className="text-white/80 text-sm font-medium uppercase tracking-wider">Verification Code</p>
+                <p className="text-white/80 text-sm font-medium uppercase tracking-wider">Session Passkey</p>
                 <p className="text-4xl font-bold font-mono tracking-widest">{sessionInfo.verification_code}</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-white/80 text-sm">Share this code with students</p>
-              <p className="text-white/60 text-xs">Students must enter this code to mark attendance</p>
+              <p className="text-white/80 text-sm">Share this passkey with students</p>
+              <p className="text-white/60 text-xs">Students must enter it to mark attendance</p>
             </div>
           </div>
         </div>
@@ -255,9 +257,13 @@ function SessionDisplayContent() {
                 <Copy className="h-3.5 w-3.5 text-gray-400" />
               </button>
             </div>
-            <p className="text-[10px] text-center text-gray-400 font-bold uppercase tracking-widest">
-              Secured by WebAuthn Protocol
-            </p>
+            {sessionInfo?.verification_code && (
+              <div className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+                <p className="font-semibold text-gray-900">UniAtt</p>
+                <p className="mt-1 break-all"><span className="font-medium">Link:</span> {joinUrl}</p>
+                <p><span className="font-medium">Passkey:</span> <span className="font-mono">{sessionInfo.verification_code}</span></p>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -309,13 +315,21 @@ function SessionDisplayContent() {
                         <span className="text-gray-300">&bull;</span>
                         <p className="font-mono text-xs font-medium text-gray-500">{record.student.student_index}</p>
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                      <p className="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-1">
                         <CheckCircle className="h-3 w-3 text-green-500" />
-                        Verified via Biometrics at {new Date(record.verified_at).toLocaleTimeString()}
+                        Verified by session passkey at {new Date(record.verified_at).toLocaleTimeString()}
+                        {typeof record.distance_meters === 'number' && (
+                          <span>&bull; {record.distance_meters}m from point</span>
+                        )}
                       </p>
                     </div>
                   </div>
-                  <Badge variant="success">Present</Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant="success">Present</Badge>
+                    {record.suspicious_reason && (
+                      <Badge variant="warning">{record.suspicious_reason}</Badge>
+                    )}
+                  </div>
                 </div>
               ))}
               {attendance.length === 0 && (
