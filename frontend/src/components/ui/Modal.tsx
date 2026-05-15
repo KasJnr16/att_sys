@@ -52,7 +52,7 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-fade-in"
         onClick={onClose}
@@ -63,10 +63,10 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? 'modal-title' : undefined}
-        className={`relative w-full ${sizes[size]} rounded-xl bg-white shadow-2xl animate-scale-in overflow-hidden`}
+        className={`relative flex max-h-[calc(100vh-2rem)] w-full flex-col ${sizes[size]} rounded-xl bg-white shadow-2xl animate-scale-in overflow-hidden`}
       >
         {title && (
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
             <h3 id="modal-title" className="text-lg font-semibold text-slate-900">{title}</h3>
             <button
               onClick={onClose}
@@ -77,9 +77,9 @@ export const Modal: React.FC<ModalProps> = ({
             </button>
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="overflow-y-auto p-4 sm:p-6">{children}</div>
         {footer && (
-          <div className="border-t border-slate-200 px-6 py-4 bg-slate-50/50 flex justify-end gap-3">
+          <div className="flex flex-shrink-0 justify-end gap-3 border-t border-slate-200 bg-slate-50/50 px-6 py-4">
             {footer}
           </div>
         )}

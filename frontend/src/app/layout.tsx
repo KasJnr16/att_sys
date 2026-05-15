@@ -28,6 +28,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
       data-scroll-behavior="smooth"
+      suppressHydrationWarning
     >
       <body className="h-full bg-gray-50 text-gray-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
         <Providers>

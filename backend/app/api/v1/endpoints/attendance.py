@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func, or_
@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.config import settings
 from app.models.attendance import AttendanceCodeAttempt, AttendanceSession
 from app.models.academic import ClassSession, Class
 from app.models.enrollment import AttendanceRecord
@@ -21,6 +22,7 @@ from app.api.deps import RoleChecker
 from app.models.user import User
 from app.services.attendance_service import AttendanceService
 from app.services.class_access import get_session_access
+from app.services.face_service import FaceService
 from app.services.webauthn_service import WebAuthnService
 
 router = APIRouter()
@@ -438,6 +440,7 @@ class VerifyStudentAttendanceRequest(BaseModel):
     token: str
     latitude: float
     longitude: float
+    face_image_base64: Optional[str] = None
 
 
 @router.post("/verify-student")
@@ -480,6 +483,30 @@ async def verify_student_attendance(
     student = student_result.scalars().first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    if settings.FACE_VERIFICATION_REQUIRED and not student.face_embedding:
+        raise HTTPException(status_code=403, detail="Please enroll your face before marking attendance.")
+    if settings.FACE_VERIFICATION_REQUIRED and not request.face_image_base64:
+        raise HTTPException(status_code=400, detail="Please take a selfie to verify your identity.")
+
+    face_result = None
+    if request.face_image_base64 and student.face_embedding:
+        face_result = await FaceService.verify(student.id, request.face_image_base64, student.face_embedding)
+        if settings.FACE_VERIFICATION_REQUIRED and not face_result.get("verified"):
+            match_confidence = face_result.get("confidence")
+            match_threshold = face_result.get("match_threshold", settings.FACE_MATCH_CONFIDENCE_THRESHOLD)
+            if isinstance(match_confidence, (int, float)):
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        f"Face match is {round(match_confidence)}%. "
+                        f"It must be at least {round(float(match_threshold))}%. "
+                        "If these are your details, retake a clear selfie and try again."
+                    ),
+                )
+            raise HTTPException(
+                status_code=403,
+                detail="Face verification failed. If these are your details, retake a clear selfie and try again.",
+            )
 
     client_ip = _get_client_ip(http_request)
     user_agent = http_request.headers.get("user-agent", "unknown")
@@ -523,6 +550,12 @@ async def verify_student_attendance(
         attendance_latitude=request.latitude,
         attendance_longitude=request.longitude,
         distance_meters=int(round(distance or 0)) if distance is not None else None,
+        face_verified=bool(face_result.get("verified")) if face_result else None,
+        face_distance=face_result.get("distance") if face_result else None,
+        face_threshold=face_result.get("threshold") if face_result else None,
+        face_confidence=face_result.get("confidence") if face_result else None,
+        face_model=face_result.get("model") if face_result else None,
+        face_antispoof_passed=face_result.get("anti_spoofing_passed") if face_result else None,
     )
     db.add(db_record)
 

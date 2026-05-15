@@ -60,3 +60,7 @@ class AttendanceFeedRecord(BaseModel):
     student: AttendanceFeedStudent
     distance_meters: Optional[int] = None
     suspicious_reason: Optional[str] = None
+    face_verified: Optional[bool] = None
+    face_confidence: Optional[float] = None
+    face_distance: Optional[float] = None
+    face_threshold: Optional[float] = None

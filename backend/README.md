@@ -40,3 +40,22 @@ This is a production-oriented FastAPI backend for a secure, scalable university 
 
 ## API Documentation
 Once the server is running, visit `http://localhost:8000/api/v1/docs` for the interactive OpenAPI documentation.
+
+## DeepFace Weights in Docker
+
+DeepFace downloads model weights into `$DEEPFACE_HOME/.deepface/weights`.
+
+For Docker deployments, this project supports optional seed weights:
+
+1. Put downloaded weights in `backend/deepface_seed/weights/`.
+2. Build the backend Docker image.
+3. At startup, `entrypoint.sh` copies missing seed weights into `$DEEPFACE_HOME/.deepface/weights`.
+
+For Render, attach a persistent disk and set its mount path to the same value as `DEEPFACE_HOME`.
+The production default is:
+
+```text
+DEEPFACE_HOME=/var/data/deepface
+```
+
+Only files under the persistent disk mount path survive Render redeploys. The seed files help first boot avoid downloading weights again, and the disk keeps any downloaded or seeded weights available after that.

@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+deepface_home/
+.deepface/
+venv/
+.venv/
+
+alembic/__pycache__/
+app/**/__pycache__/
+tests/**/__pycache__/

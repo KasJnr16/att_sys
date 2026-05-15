@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     AUTH_TOKEN_EXPIRE_MINUTES: int = 60
     EMAIL_VERIFICATION_CODE_EXPIRE_MINUTES: int = 15
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    FACE_VERIFICATION_REQUIRED: bool = True
+    DEEPFACE_HOME: str = "deepface_home"
+    FACE_MODEL_NAME: str = "Facenet512"
+    FACE_DETECTOR_BACKEND: str = "opencv"
+    FACE_DISTANCE_METRIC: str = "cosine"
+    FACE_DISTANCE_THRESHOLD: float = 0.30
+    FACE_MATCH_CONFIDENCE_THRESHOLD: float = Field(80.0, ge=0, le=100)
+    FACE_ANTI_SPOOFING: bool = True
+    FACE_ENFORCE_DETECTION: bool = True
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

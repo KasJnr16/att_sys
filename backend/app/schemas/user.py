@@ -98,3 +98,4 @@ class StudentLookupResponse(BaseModel):
     student_index: Optional[str] = None
     full_name: Optional[str] = None
     programme_name: Optional[str] = None
+    face_enrolled: bool = False

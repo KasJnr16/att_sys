@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, DateTime, Enum, String, UniqueConstraint, Float
+from sqlalchemy import Column, Integer, ForeignKey, DateTime, Enum, String, UniqueConstraint, Float, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -42,6 +42,12 @@ class AttendanceRecord(Base):
     attendance_latitude = Column(Float, nullable=True)
     attendance_longitude = Column(Float, nullable=True)
     distance_meters = Column(Integer, nullable=True)
+    face_verified = Column(Boolean, nullable=True)
+    face_distance = Column(Float, nullable=True)
+    face_threshold = Column(Float, nullable=True)
+    face_confidence = Column(Float, nullable=True)
+    face_model = Column(String, nullable=True)
+    face_antispoof_passed = Column(Boolean, nullable=True)
 
     student = relationship("Student")
     class_session = relationship("ClassSession", back_populates="attendance_records")

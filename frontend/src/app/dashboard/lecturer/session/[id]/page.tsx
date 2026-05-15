@@ -22,6 +22,10 @@ interface AttendanceFeedRecord {
   verification_method: string;
   distance_meters?: number | null;
   suspicious_reason?: string | null;
+  face_verified?: boolean | null;
+  face_confidence?: number | null;
+  face_distance?: number | null;
+  face_threshold?: number | null;
   student: {
     id: number;
     student_index: string;
@@ -159,6 +163,18 @@ function SessionDisplayContent() {
     } finally {
       setEndingSession(false);
     }
+  };
+
+  const getFaceMatchPercent = (record: AttendanceFeedRecord) => {
+    if (typeof record.face_distance === 'number') {
+      return Math.round(Math.max(0, Math.min(100, (1 - record.face_distance) * 100)));
+    }
+
+    if (typeof record.face_confidence === 'number') {
+      return Math.round(record.face_confidence);
+    }
+
+    return null;
   };
 
   if (loading) {
@@ -328,6 +344,11 @@ function SessionDisplayContent() {
                     <Badge variant="success">Present</Badge>
                     {record.suspicious_reason && (
                       <Badge variant="warning">{record.suspicious_reason}</Badge>
+                    )}
+                    {record.face_verified && (
+                      <Badge variant="info">
+                        Face matched{getFaceMatchPercent(record) !== null ? ` ${getFaceMatchPercent(record)}%` : ''}
+                      </Badge>
                     )}
                   </div>
                 </div>

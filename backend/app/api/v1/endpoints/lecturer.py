@@ -624,6 +624,10 @@ async def get_session_attendance(
             "verification_method": record.verification_method.value if hasattr(record.verification_method, "value") else str(record.verification_method),
             "distance_meters": record.distance_meters,
             "suspicious_reason": suspicious_reason,
+            "face_verified": record.face_verified,
+            "face_confidence": record.face_confidence,
+            "face_distance": record.face_distance,
+            "face_threshold": record.face_threshold,
             "student": {
                 "id": record.student.id,
                 "student_index": record.student.student_index,

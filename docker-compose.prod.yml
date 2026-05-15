@@ -35,6 +35,15 @@ services:
       RP_ID: ${RP_ID:?RP_ID is required}
       RP_NAME: ${RP_NAME:-University Attendance System}
       ORIGIN: ${ORIGIN:?ORIGIN is required}
+      FACE_VERIFICATION_REQUIRED: ${FACE_VERIFICATION_REQUIRED:-true}
+      DEEPFACE_HOME: ${DEEPFACE_HOME:-/var/data/deepface}
+      FACE_MODEL_NAME: ${FACE_MODEL_NAME:-Facenet512}
+      FACE_DETECTOR_BACKEND: ${FACE_DETECTOR_BACKEND:-opencv}
+      FACE_DISTANCE_METRIC: ${FACE_DISTANCE_METRIC:-cosine}
+      FACE_DISTANCE_THRESHOLD: ${FACE_DISTANCE_THRESHOLD:-0.30}
+      FACE_MATCH_CONFIDENCE_THRESHOLD: ${FACE_MATCH_CONFIDENCE_THRESHOLD:-80}
+      FACE_ANTI_SPOOFING: ${FACE_ANTI_SPOOFING:-true}
+      FACE_ENFORCE_DETECTION: ${FACE_ENFORCE_DETECTION:-true}
     depends_on:
       db:
         condition: service_healthy

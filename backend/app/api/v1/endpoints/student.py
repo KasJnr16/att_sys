@@ -17,6 +17,7 @@ from app.schemas.attendance import AttendanceRecord as AttendanceRecordSchema
 from app.schemas.user import StudentLookupResponse
 from app.api.deps import RoleChecker
 from app.services.attendance_service import AttendanceService
+from app.services.face_service import FaceService
 from app.services.webauthn_service import WebAuthnService
 
 router = APIRouter()
@@ -82,6 +83,7 @@ async def lookup_student(
         "student_index": student.student_index,
         "full_name": student.full_name,
         "programme_name": student.programme.name if student.programme else None,
+        "face_enrolled": bool(student.face_embedding),
     }
 
 
@@ -110,6 +112,41 @@ class StartNewStudentRegistrationRequest(BaseModel):
     full_name: str | None = None
     class_session_id: int
     token: str
+
+
+class StudentFaceEnrollmentRequest(BaseModel):
+    student_id: int
+    token: str
+    image_base64: str
+
+
+@router.post("/face-enrollment")
+async def enroll_student_face(
+    request: StudentFaceEnrollmentRequest,
+    http_request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    await _require_verified_code(db, request.token, http_request)
+
+    result = await db.execute(
+        select(Student).where(Student.id == request.student_id)
+    )
+    student = result.scalars().first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    enrollment = await FaceService.enroll(student.id, request.image_base64)
+    student.face_embedding = enrollment.get("embedding")
+    student.face_embedding_model = enrollment.get("embedding_model")
+    student.face_embedding_dimensions = enrollment.get("embedding_dimensions")
+    student.face_enrolled_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {
+        "enrolled": True,
+        "student_id": student.id,
+        "face_enrolled_at": student.face_enrolled_at.isoformat(),
+    }
 
 
 @router.post("/start-registration")

@@ -16,3 +16,7 @@ resend
 pytest
 httpx
 pytest-asyncio
+deepface
+Pillow
+tf-keras
+torch
